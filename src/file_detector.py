@@ -34,11 +34,15 @@ def detect_changed_files(schema_path: str, workspace: str) -> list[str]:
     changed = _get_git_diff_files(workspace)
 
     if changed:
-        console.print(f"  [dim]Git detected {len(changed)} total changed file(s)[/dim]")
+        console.print(f"[green]Git detected {len(changed)} changed file(s)[/green]")
     else:
-        # Fallback: scan schema_path for all supported files
-        console.print("  [dim]No git diff available. Scanning schema_path for all files...[/dim]")
+        console.print("[yellow]No git diff → scanning all schema files[/yellow]")
         changed = _scan_directory(schema_path, workspace)
+
+        if changed:
+            console.print(f"[green]Found {len(changed)} files via fallback[/green]")
+        else:
+            console.print("[red]No schema files found even in fallback[/red]")
 
     # Filter to only supported schema files within schema_path
     filtered = _filter_files(changed, schema_path)
@@ -47,38 +51,49 @@ def detect_changed_files(schema_path: str, workspace: str) -> list[str]:
 
 def _get_git_diff_files(workspace: str) -> list[str]:
     """
-    Use git to find files changed vs the base branch (origin/main or origin/master).
-    This is the standard way to detect changes inside GitHub Actions.
+    Detect changed files using PR base and HEAD.
+    Works reliably in GitHub Actions PR context.
     """
     try:
         os.chdir(workspace)
 
-        # Try fetching origin to get base branch info
+        base_ref = os.getenv("GITHUB_BASE_REF")
+        head_ref = os.getenv("GITHUB_HEAD_REF")
+
+        console.print(f"[dim]Base ref: {base_ref} | Head ref: {head_ref}[/dim]")
+
+        if not base_ref:
+            console.print("[dim]No GITHUB_BASE_REF found → fallback[/dim]")
+            return []
+
+        # Fetch base branch explicitly
         subprocess.run(
-            ["git", "fetch", "origin"],
-            capture_output=True, check=False
+            ["git", "fetch", "origin", base_ref],
+            capture_output=True,
+            check=False
         )
 
-        # Try common base branch names
-        for base_branch in ["origin/main", "origin/master"]:
-            result = subprocess.run(
-                ["git", "diff", "--name-only", base_branch, "HEAD"],
-                capture_output=True, text=True, check=False
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
-                return files
-
-        # If no base branch found, get files changed in the last commit
+        # Proper PR diff
         result = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
-            capture_output=True, text=True, check=False
+            ["git", "diff", "--name-only", f"origin/{base_ref}...HEAD"],
+            capture_output=True,
+            text=True,
+            check=False
         )
+
         if result.returncode == 0:
-            return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+        files = [f.strip() for f in result.stdout.split("\n") if f.strip()]
+
+        if files:
+            console.print(f"[green]Detected changed files:[/green] {files}")
+            return files
+        else:
+            console.print("[yellow]Git diff returned no changed files[/yellow]")
+
+        console.print("[dim]No files detected via PR diff[/dim]")
 
     except Exception as e:
-        console.print(f"  [dim]Git diff error (non-fatal): {e}[/dim]")
+        console.print(f"[red]Git diff error:[/red] {e}")
 
     return []
 
@@ -117,7 +132,9 @@ def _filter_files(files: list[str], schema_path: str) -> list[str]:
 
     for filepath in files:
         # Must be under schema_path
-        if schema_path != "." and not filepath.startswith(schema_path):
+        normalized_path = schema_path.strip("./")
+
+        if schema_path != "." and not filepath.startswith(normalized_path):
             continue
 
         # Must have a supported extension
