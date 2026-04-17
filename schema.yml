@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: orders
+    description: "Contains all customer orders placed through the platform"
+    meta:
+      owner: "data-team@company.com"
+    tags:
+      - finance
+      - core
+    columns:
+      - name: order_id
+        description: "Unique identifier for each order (Primary Key)"
+        tags:
+          - PK
+      - name: customer_id
+        description: "Foreign key referencing the customers table"
+        tags:
+          - PII
+          - FK
+      - name: order_amount
+        description: "Total value of the order in USD"
+      - name: status
+        description: "Current order status: pending, confirmed, shipped, delivered, cancelled"
+      - name: created_at
+        description: "Timestamp when the order was placed"
+
+  - name: customers
+    description: "Master table of all registered customers"
+    meta:
+      owner: "analytics@company.com"
+    tags:
+      - PII
+      - core
+    columns:
+      - name: customer_id
+        description: "Unique identifier for each customer (Primary Key)"
+        tags:
+          - PK
+      - name: email
+        description: "Customer email address"
+        tags:
+          - PII
+      - name: full_name
+        description: "Customer full name"
+        tags:
+          - PII
+      - name: created_at
+        description: "Timestamp when the customer account was created"

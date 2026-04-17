@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "payments",
+  "description": "Payment transactions linked to orders",
+  "x-owner": "payments-team@company.com",
+  "x-tags": ["finance", "PCI"],
+  "properties": {
+    "payment_id": {
+      "type": "integer",
+      "description": "Unique identifier for each payment",
+      "x-tags": ["PK"]
+    },
+    "order_id": {
+      "type": "integer",
+      "description": "Foreign key referencing the orders table",
+      "x-tags": ["FK"]
+    },
+    "amount": {
+      "type": "number",
+      "description": "Payment amount in USD"
+    },
+    "method": {
+      "type": "string",
+      "description": "Payment method: credit_card, paypal, bank_transfer"
+    },
+    "card_last_four": {
+      "type": ["string", "null"],
+      "description": "Last 4 digits of the card used",
+      "x-tags": ["PCI", "PII"]
+    },
+    "status": {
+      "type": "string",
+      "description": "Payment status: pending, completed, failed, refunded"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Timestamp when the payment was processed"
+    }
+  }
+}

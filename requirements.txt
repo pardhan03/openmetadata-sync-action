@@ -1,0 +1,23 @@
+# OpenMetadata Python SDK
+openmetadata-ingestion==1.6.0
+
+# YAML parsing (for dbt models)
+PyYAML==6.0.2
+
+# SQL parsing (for CREATE TABLE statements)
+sqlglot==25.0.0
+
+# Smart dictionary diffing (detect what actually changed)
+deepdiff==7.0.1
+
+# GitHub API (for posting PR comments)
+PyGithub==2.3.0
+
+# HTTP requests (fallback for direct API calls)
+requests==2.32.3
+
+# Environment variable management
+python-dotenv==1.0.1
+
+# Rich terminal output (nice logs in GitHub Actions)
+rich==13.7.1

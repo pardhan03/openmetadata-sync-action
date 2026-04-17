@@ -1,0 +1,56 @@
+# .github/workflows/openmetadata-sync.yml
+#
+# Add this file to YOUR repository (not the action repo).
+# This workflow triggers the OpenMetadata Sync Action on every PR
+# that changes schema files.
+
+name: Sync Metadata to OpenMetadata
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      # Trigger only when schema-related files change
+      - '**.yml'
+      - '**.yaml'
+      - '**.sql'
+      - '**.json'
+
+  # Also allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  sync-metadata:
+    name: Sync to OpenMetadata
+    runs-on: ubuntu-latest
+
+    # Required permissions for posting PR comments
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git diff
+
+      - name: Sync metadata to OpenMetadata
+        uses: your-username/openmetadata-sync-action@v1  # 👈 Replace with your repo
+        with:
+          openmetadata_host: ${{ secrets.OPENMETADATA_HOST }}
+          openmetadata_token: ${{ secrets.OPENMETADATA_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          database_service_name: ${{ secrets.OM_SERVICE_NAME }}
+          schema_path: './models'          # Path to your schema files
+          post_pr_comment: 'true'
+          dry_run: 'false'
+
+      # Optional: Use the outputs in subsequent steps
+      - name: Print sync results
+        run: |
+          echo "Tables updated: ${{ steps.sync-metadata.outputs.tables_updated }}"
+          echo "Columns updated: ${{ steps.sync-metadata.outputs.columns_updated }}"
+          echo "Changes detected: ${{ steps.sync-metadata.outputs.changes_detected }}"
