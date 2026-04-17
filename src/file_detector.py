@@ -82,13 +82,13 @@ def _get_git_diff_files(workspace: str) -> list[str]:
         )
 
         if result.returncode == 0:
-        files = [f.strip() for f in result.stdout.split("\n") if f.strip()]
+            files = [f.strip() for f in result.stdout.split("\n") if f.strip()]
 
-        if files:
-            console.print(f"[green]Detected changed files:[/green] {files}")
-            return files
-        else:
-            console.print("[yellow]Git diff returned no changed files[/yellow]")
+            if files:
+                console.print(f"[green]Detected changed files:[/green] {files}")
+                return files
+            else:
+                console.print("[yellow]Git diff returned no changed files[/yellow]")
 
         console.print("[dim]No files detected via PR diff[/dim]")
 
