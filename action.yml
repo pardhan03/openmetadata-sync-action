@@ -32,6 +32,9 @@ inputs:
     description: 'Whether to post a summary comment on the PR (true/false)'
     required: false
     default: 'true'
+  pr_number:
+    description: 'PR number for posting comments'
+    required: false
 
   dry_run:
     description: 'If true, only logs what would change without actually updating OpenMetadata'
@@ -59,4 +62,4 @@ runs:
     DB_SERVICE_NAME: ${{ inputs.database_service_name }}
     POST_PR_COMMENT: ${{ inputs.post_pr_comment }}
     DRY_RUN: ${{ inputs.dry_run }}
-    PR_NUMBER: ${{ github.event.pull_request.number }}
+    PR_NUMBER: ${{ inputs.pr_number }}
