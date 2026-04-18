@@ -1,8 +1,6 @@
 """
 file_detector.py — Detects which schema-related files changed in a PR or push.
-
-In a GitHub Actions environment, we use git to find files that changed
-compared to the base branch. Supports filtering by schema_path.
+Enhanced with detailed logging for debugging & demo visibility.
 """
 
 import os
@@ -11,10 +9,7 @@ from rich.console import Console
 
 console = Console()
 
-# File extensions we care about
 SUPPORTED_EXTENSIONS = {".yml", ".yaml", ".sql", ".json"}
-
-# Directories/filenames to always ignore
 IGNORE_PATTERNS = {
     "node_modules", ".git", "__pycache__", ".venv",
     "package.json", "package-lock.json", "tsconfig.json"
@@ -22,131 +17,154 @@ IGNORE_PATTERNS = {
 
 
 def detect_changed_files(schema_path: str, workspace: str) -> list[str]:
-    """
-    Detect files that changed in this PR/push and match our supported types.
+    console.rule("[bold blue]📂 FILE DETECTION STARTED")
 
-    Strategy:
-      1. Try git diff to get changed files (works in GitHub Actions)
-      2. Fall back to scanning the schema_path directory (useful for local testing)
+    console.print(f"📁 Workspace: {workspace}")
+    console.print(f"📁 Schema Path: {schema_path}")
 
-    Returns a list of relative file paths.
-    """
     changed = _get_git_diff_files(workspace)
 
-    if changed:
-        console.print(f"[green]Git detected {len(changed)} changed file(s)[/green]")
-    else:
-        console.print("[yellow]No git diff → scanning all schema files[/yellow]")
+    if not changed:
+        console.print("⚠️ No git diff found → scanning all schema files", style="yellow")
         changed = _scan_directory(schema_path, workspace)
+        console.print(f"📦 Found {len(changed)} files via fallback scan")
 
-        if changed:
-            console.print(f"[green]Found {len(changed)} files via fallback[/green]")
-        else:
-            console.print("[red]No schema files found even in fallback[/red]")
-
-    # Filter to only supported schema files within schema_path
     filtered = _filter_files(changed, schema_path)
+
+    console.print(f" Final filtered files: {len(filtered)}", style="green")
+    for f in filtered:
+        console.print(f"   → {f}")
+
+    console.rule("[bold green]📂 FILE DETECTION COMPLETED")
     return filtered
 
 
 def _get_git_diff_files(workspace: str) -> list[str]:
-    """
-    Detect changed files using PR base and HEAD.
-    Works reliably in GitHub Actions PR context.
-    """
     try:
         os.chdir(workspace)
 
-        base_ref = os.getenv("GITHUB_BASE_REF")
-        head_ref = os.getenv("GITHUB_HEAD_REF")
+        base_ref = os.environ.get("GITHUB_BASE_REF", "")
+        head_ref = os.environ.get("GITHUB_HEAD_REF", "")
 
-        console.print(f"[dim]Base ref: {base_ref} | Head ref: {head_ref}[/dim]")
+        console.print("\n🔍 [bold]Git Diff Detection[/bold]")
+        console.print(f"   Base ref: {base_ref or 'N/A'}")
+        console.print(f"   Head ref: {head_ref or 'N/A'}")
 
-        if not base_ref:
-            console.print("[dim]No GITHUB_BASE_REF found → fallback[/dim]")
-            return []
+        # Strategy 1: PR diff (BEST CASE)
+        if base_ref:
+            console.print("➡️ Strategy 1: PR diff using base_ref", style="cyan")
 
-        # Fetch base branch explicitly
-        subprocess.run(
-            ["git", "fetch", "origin", base_ref],
-            capture_output=True,
-            check=False
-        )
+            subprocess.run(["git", "fetch", "origin", base_ref], capture_output=True, check=False)
 
-        # Proper PR diff
-        result = subprocess.run(
-            ["git", "diff", "--name-only", f"origin/{base_ref}...HEAD"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
+            result = subprocess.run(
+                ["git", "diff", "--name-only", f"origin/{base_ref}...HEAD"],
+                capture_output=True, text=True, check=False
+            )
 
-        if result.returncode == 0:
-            files = [f.strip() for f in result.stdout.split("\n") if f.strip()]
-
-            if files:
-                console.print(f"[green]Detected changed files:[/green] {files}")
+            if result.stdout.strip():
+                files = _parse_git_output(result.stdout)
+                console.print(f" Found {len(files)} file(s) via PR diff", style="green")
                 return files
             else:
-                console.print("[yellow]Git diff returned no changed files[/yellow]")
+                console.print(" No files found in PR diff", style="red")
 
-        console.print("[dim]No files detected via PR diff[/dim]")
+        # Strategy 2: Merge-base diff
+        console.print(" Strategy 2: Merge-base diff", style="cyan")
+
+        subprocess.run(["git", "fetch", "origin"], capture_output=True, check=False)
+
+        for base in ["origin/main", "origin/master"]:
+            result = subprocess.run(
+                ["git", "merge-base", "HEAD", base],
+                capture_output=True, text=True, check=False
+            )
+
+            if result.stdout.strip():
+                merge_base = result.stdout.strip()
+                console.print(f"   Using base: {base}")
+
+                result2 = subprocess.run(
+                    ["git", "diff", "--name-only", merge_base, "HEAD"],
+                    capture_output=True, text=True, check=False
+                )
+
+                if result2.stdout.strip():
+                    files = _parse_git_output(result2.stdout)
+                    console.print(f" Found {len(files)} file(s) via merge-base", style="green")
+                    return files
+
+        # Strategy 3: Last commit diff
+        console.print("➡️ Strategy 3: HEAD~1 diff", style="cyan")
+
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+            capture_output=True, text=True, check=False
+        )
+
+        if result.stdout.strip():
+            files = _parse_git_output(result.stdout)
+            console.print(f"Found {len(files)} file(s) via last commit", style="green")
+            return files
+
+        console.print(" No files detected via any git strategy", style="red")
 
     except Exception as e:
-        console.print(f"[red]Git diff error:[/red] {e}")
+        console.print(f"Git diff error: {e}", style="bold red")
 
     return []
 
 
 def _scan_directory(schema_path: str, workspace: str) -> list[str]:
-    """
-    Recursively scan a directory for all supported schema files.
-    Used as a fallback when git diff isn't available.
-    """
+    console.print("\n📦 [bold]Fallback Directory Scan[/bold]")
+
     results = []
     full_path = os.path.join(workspace, schema_path)
 
+    console.print(f"Scanning path: {full_path}")
+
     for root, dirs, files in os.walk(full_path):
-        # Skip ignored directories in-place
         dirs[:] = [d for d in dirs if d not in IGNORE_PATTERNS]
 
         for file in files:
             _, ext = os.path.splitext(file)
+
             if ext in SUPPORTED_EXTENSIONS:
                 abs_path = os.path.join(root, file)
-                # Store as relative path from workspace
                 rel_path = os.path.relpath(abs_path, workspace)
                 results.append(rel_path)
+                console.print(f"   + Found: {rel_path}")
 
     return results
 
 
 def _filter_files(files: list[str], schema_path: str) -> list[str]:
-    """
-    Filter a list of file paths to only include:
-    - Files within schema_path
-    - Files with supported extensions
-    - Files not matching ignore patterns
-    """
+    console.print("\n🧹 [bold]Filtering Files[/bold]")
+
     filtered = []
 
     for filepath in files:
-        # Must be under schema_path
-        normalized_path = schema_path.strip("./")
-
-        if schema_path != "." and not filepath.startswith(normalized_path):
+        if schema_path != "." and not filepath.startswith(schema_path):
+            console.print(f"   Skipped (not in schema path): {filepath}")
             continue
 
-        # Must have a supported extension
         _, ext = os.path.splitext(filepath)
         if ext not in SUPPORTED_EXTENSIONS:
+            console.print(f"   Skipped (unsupported type): {filepath}")
             continue
 
-        # Must not match any ignore patterns
         parts = filepath.replace("\\", "/").split("/")
         if any(part in IGNORE_PATTERNS for part in parts):
+            console.print(f"   Skipped (ignored path): {filepath}")
             continue
 
+        console.print(f"   Accepted: {filepath}")
         filtered.append(filepath)
 
     return filtered
+
+
+def _parse_git_output(output: str) -> list[str]:
+    files = [f.strip() for f in output.strip().split("\n") if f.strip()]
+    for f in files:
+        console.print(f"   → Changed: {f}")
+    return files

@@ -45,32 +45,47 @@ class OpenMetadataClient:
     def get_table(self, table_name: str) -> dict | None:
         """
         Look up a table in OpenMetadata by name within the configured service.
-        Returns the full table entity dict or None if not found.
+
+        Strategy (in order):
+          1. Search API  — fast, works on all OM versions, no 400 errors
+          2. FQN lookup  — direct fetch if we can construct the FQN
+          3. List API    — last resort fallback
         """
-        # OpenMetadata FQN format: service_name.database.schema.table_name
-        # We search by name since we may not know the full FQN
+        # ── 1. Search API (primary) ───────────────────────────────────────────
+        result = self._search_table_by_name(table_name)
+        if result:
+            return result
+
+        # ── 2. Try constructing FQN directly ─────────────────────────────────
+        # Common OM FQN patterns: service.db.schema.table or service.db.table
+        for fqn_pattern in [
+            f"{self.service_name}.default.public.{table_name}",
+            f"{self.service_name}.default.{table_name}",
+            f"{self.service_name}.{table_name}",
+        ]:
+            result = self._get_table_by_fqn(fqn_pattern)
+            if result:
+                return result
+
+        # ── 3. List API fallback (may 400 on some OM versions) ────────────────
         try:
             resp = self.session.get(
                 f"{self.host}/api/v1/tables",
-                params={"fields": "columns,tags,owner,description", "limit": 10},
+                params={
+                    "fields": "columns,tags,owner,description",
+                    "limit": 20,
+                    "service": self.service_name,  # filter by service to avoid 400
+                },
                 timeout=10
             )
-            resp.raise_for_status()
-            tables = resp.json().get("data", [])
-
-            # Find the table matching our name and service
-            for table in tables:
-                if table.get("name") == table_name:
-                    fqn = table.get("fullyQualifiedName", "")
-                    if self.service_name in fqn:
+            if resp.status_code == 200:
+                for table in resp.json().get("data", []):
+                    if table.get("name") == table_name:
                         return table
+        except Exception:
+            pass
 
-            # Try direct FQN search if name search didn't work
-            return self._search_table_by_name(table_name)
-
-        except Exception as e:
-            console.print(f"  [yellow]Warning: Could not fetch table '{table_name}': {e}[/yellow]")
-            return None
+        return None
 
     def _search_table_by_name(self, table_name: str) -> dict | None:
         """Use the OpenMetadata search API to find a table by name."""
