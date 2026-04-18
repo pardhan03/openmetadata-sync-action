@@ -1,10 +1,6 @@
 # 🗄️ OpenMetadata Sync — GitHub Action
 
 > Automatically sync metadata from your schema files to OpenMetadata on every Pull Request.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![OpenMetadata](https://img.shields.io/badge/OpenMetadata-1.6-blue)](https://open-metadata.org)
-
 ---
 
 ## The Problem
@@ -224,10 +220,15 @@ docker compose up -d
 
 Get your API token: **Settings → Bots → ingestion-bot → Token**
 
----
+## 🎥 Demo Video
+[Watch the demo](https://drive.google.com/file/d/17tK3ggi61ZSkc-jKdZuPT2sjpU7V0paS/view?usp=sharing)
 
-## License
+## 🏆 Hackathon Track
+Paradox #T-04 — Developer Tooling & CI/CD
+WeMakeDevs × OpenMetadata Hackathon 2026
 
-MIT © Your Name
+## 🔗 Live Demo
+- Action Repo: https://github.com/pardhan03/openmetadata-sync-action
+- Demo Repo:   https://github.com/pardhan03/openmetadata-demo
 
 Built for the [OpenMetadata Hackathon](https://openmetadata.org) 🏆
