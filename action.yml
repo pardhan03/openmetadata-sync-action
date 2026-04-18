@@ -59,3 +59,4 @@ runs:
     DB_SERVICE_NAME: ${{ inputs.database_service_name }}
     POST_PR_COMMENT: ${{ inputs.post_pr_comment }}
     DRY_RUN: ${{ inputs.dry_run }}
+    PR_NUMBER: ${{ github.event.pull_request.number }}
